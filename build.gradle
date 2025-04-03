@@ -17,11 +17,16 @@ repositories {
 
 dependencies {
     // Spring Boot Starter Dependencies
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
     implementation 'org.springframework.boot:spring-boot-starter'
     implementation 'org.springframework.boot:spring-boot-starter-web'
 
     // Testing Dependencies
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
+
+    // Lombok (for reducing boilerplate code)
+	compileOnly 'org.projectlombok:lombok'
+	annotationProcessor 'org.projectlombok:lombok'
 
     // Database Dependencies
     runtimeOnly 'org.postgresql:postgresql'
