@@ -12,13 +12,3 @@ public class Main {
 	}
 
 }
-// just to test if the server is running
-@RestController
-@RequestMapping("/api")
-class TestController {
-    
-    @GetMapping("/test")
-    public String testEndpoint() {
-        return "Splitwise Backend is running!";
-    }
-}
