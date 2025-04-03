@@ -8,6 +8,6 @@ public class HomeController {
 
     @GetMapping("/")
     public String home() {
-        return "Welcome to the Expense Sharing Backend!";
+        return "Welcome to the Expense Sharing Backend! + DB Connected";
     }
 }
