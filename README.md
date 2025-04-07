@@ -74,18 +74,26 @@ spring.datasource.password=your_password
 
 ```
 
-3. Make sure docker is running 
+
+4. Run the Flyway migration task:
+
+```
+./gradlew flywayMigrate
+
+```
+
+5. Make sure docker is running 
 
 ```
 open -a Docker
 ```
 
-3. Build the Project using docker 
+6. Build the Project using docker 
 ```
  docker build -t splitwise-backend .
 ```
 
-4. Run the Application
+7. Run the Application
 ```
  docker run -p 8080:8080 splitwise-backend          
 ```
