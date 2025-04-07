@@ -55,7 +55,6 @@ public class ExpenseController {
             )));
     return dto;
 }
-
     @GetMapping("/{id}")
     public ResponseEntity<ExpenseDTO> getExpenseById(@PathVariable Long id) {
         Expense expense = expenseService.getExpenseById(id);
@@ -66,7 +65,7 @@ public class ExpenseController {
 public ResponseEntity<List<ExpenseDTO>> getExpensesByUserId(@PathVariable Long userId) {
     List<ExpenseDTO> expenses = expenseService.getExpensesByUserId(userId)
             .stream()
-            .map(this::mapToDTO) // Use the mapToDTO method defined in this controller
+            .map(this::mapToDTO)
             .collect(Collectors.toList());
     return ResponseEntity.ok(expenses);
 }
@@ -78,19 +77,17 @@ public ResponseEntity<List<ExpenseDTO>> getExpensesByUserId(@PathVariable Long u
         Pageable pageable = PageRequest.of(page, size);
         return expenseService.getExpensesByUserIdPaginated(userId, pageable);
     }
-@GetMapping("/getBalance/{id}")
-public ResponseEntity<Map<String, String>> getUserBalance(@PathVariable Long id) {
-    Map<String, String> balance = expenseService.getUserBalance(id);
-    return ResponseEntity.ok(balance);
-}
 
-@PostMapping("/settle")
-public ResponseEntity<String> settlePayment(@RequestParam Long senderId, 
-                                            @RequestParam Long receiverId, 
-                                            @RequestParam BigDecimal amount) {
-    expenseService.settlePayment(senderId, receiverId, amount);
-    String message = String.format("User %d has successfully settled payment to %d", senderId, receiverId);
-    return ResponseEntity.ok(message);
-}
+    @GetMapping("/getBalance/{id}")
+    public ResponseEntity<Map<String, Object>> getUserBalance(@PathVariable Long id) {
+        Map<String, Object> balance = expenseService.getUserBalance(id);
+        return ResponseEntity.ok(balance);
+    }
+
+    @PostMapping("/settle")
+    public ResponseEntity<String> settlePayment(@RequestParam Long senderId,@RequestParam Long receiverId, @RequestParam BigDecimal amount) {
+        String message = expenseService.settlePayment(senderId, receiverId, amount);
+        return ResponseEntity.ok(message);
+    }
    
 }
