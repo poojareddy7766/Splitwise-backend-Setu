@@ -6,10 +6,10 @@ This is a backend application built using Spring Boot to manage expenses between
 The system allows users <br/> 
         1. to login/ register </br>
         2. to add expenses, view expenses<br/> 
-        2.  split/ settle the expense amount equally / unequally/ amount or percentage <br/> 
-        3.  view their expenditures <br/> 
-        4.  Get their final balances./ Track Balances <br/> 
-        5.  Paginated Expense Retrieval <br />
+        3.  split/ settle the expense amount equally / unequally/ amount or percentage <br/> 
+        4.  view their expenditures <br/> 
+        5.  Get their final balances./ Track Balances <br/> 
+        6.  Paginated Expense Retrieval <br />
 
 
 
