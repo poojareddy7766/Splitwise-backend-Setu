@@ -51,10 +51,11 @@ bootJar {
 
 
 flyway {
-    url = 'jdbc:postgresql://localhost:5432/splitwise_db'
-    user = 'user_name'
+    url = 'jdbc:postgresql://localhost:5432/postgres'
+    user = 'your_username'
     password = 'your_password'
     schemas = ['public']
+    placeholders = [databaseName : 'splitwise_db']
     locations = ['filesystem:src/main/resources/db/migration']
     baselineOnMigrate = true 
 }
