@@ -63,22 +63,24 @@ cd splitwise-backend
 Create a PostgreSQL database named splitwise_db.
 Update the database connection details in src/main/resources/application.properties:
 ```
-spring.datasource.url=jdbc:postgresql://localhost:5432/splitwise_db
 spring.datasource.username=your_username
 spring.datasource.password=your_password
-spring.jpa.hibernate.ddl-auto=update
 ```
 
-3. Build the Project
-Use Gradle to build the project:
+3. Make sure docker is running 
+
 ```
-./gradlew build
+open -a Docker
+```
+
+3. Build the Project using docker 
+```
+ docker build -t splitwise-backend .
 ```
 
 4. Run the Application
-Start the application using the following command:
 ```
-./gradlew bootRun
+ docker run -p 8080:8080 splitwise-backend          
 ```
 
 The application will start on http://localhost:8080.
