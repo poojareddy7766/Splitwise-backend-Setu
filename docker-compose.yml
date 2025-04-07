@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/splitwise_db
+      SPRING_DATASOURCE_USERNAME: poojareddy
+      SPRING_DATASOURCE_PASSWORD: ASDFzxcv@8688_
+      JWT_SECRET: your-very-secure-and-long-secret-key-1234567890
+      JWT_EXPIRATION: 86400000000
+    depends_on:
+      - db
+
+  db:
+    image: postgres:15
+    container_name: postgres
+    environment:
+      POSTGRES_USER: poojareddy
+      POSTGRES_PASSWORD: ASDFzxcv@8688_
+      POSTGRES_DB: splitwise_db
+    ports:
+      - "5432:5432"
