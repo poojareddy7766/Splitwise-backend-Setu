@@ -83,7 +83,7 @@ open -a Docker
  docker run -p 8080:8080 splitwise-backend          
 ```
 
-The application will start on http://localhost:8080.
+The application will start on http://localhost:8080
 
 API Endpoints
 1. User Management
