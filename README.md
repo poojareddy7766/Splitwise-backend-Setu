@@ -56,7 +56,7 @@ Before running the project, ensure you have the following installed:
 
 ```
 git clone https://github.com/poojareddy7766/Splitwise-backend-Setu.git 
-cd splitwise-backend
+cd Splitwise-backend-Setu 
 ```
 
 2. Configure the Database
