@@ -67,6 +67,13 @@ spring.datasource.username=your_username
 spring.datasource.password=your_password
 ```
 
+3. Build the project
+
+```
+./gradlew build
+
+```
+
 3. Make sure docker is running 
 
 ```
