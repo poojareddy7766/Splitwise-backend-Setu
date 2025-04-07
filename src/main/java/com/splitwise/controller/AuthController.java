@@ -12,12 +12,14 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
-
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.HashMap;
 import java.util.Map;
 
 @RestController
 @RequestMapping("/api/auth")
+@Tag(name = "Authentication", description = "APIs for user authentication and registration")
 public class AuthController {
 
     private final AuthenticationManager authenticationManager;
@@ -33,12 +35,14 @@ public class AuthController {
     }
 
    @PostMapping("/register")
+    @Operation(summary = "Register a new user", description = "Creates a new user in the system")
 public ResponseEntity<?> registerUser(@Valid @RequestBody User user) {
     User registeredUser = userService.registerUser(user);
     return ResponseEntity.ok(registeredUser);
 }
 
     @PostMapping("/login")
+    @Operation(summary = "User login", description = "Authenticates a user and returns a JWT token")
     public ResponseEntity<?> loginUser(@Valid @RequestBody LoginRequest loginRequest) {
         Authentication authentication = authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(loginRequest.getEmail(), loginRequest.getPassword()));
