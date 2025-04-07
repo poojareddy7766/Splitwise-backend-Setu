@@ -4,12 +4,12 @@
 This is a backend application built using Spring Boot to manage expenses between users. 
 <br/> 
 The system allows users <br/> 
-        1.  to add expenses <br/> 
-        2.  split the expense amount equally / unequally/ amount or percentage <br/> 
+        1. to login/ register </br>
+        2. to add expenses, view expenses<br/> 
+        2.  split/ settle the expense amount equally / unequally/ amount or percentage <br/> 
         3.  view their expenditures <br/> 
-        4.  Get their final balances. <br/> 
-Extra Feature:
-        5.  create groups, add members, and split expenses among group members.
+        4.  Get their final balances./ Track Balances <br/> 
+        5.  Paginated Expense Retrieval <br />
 
 
 
@@ -45,6 +45,7 @@ Before running the project, ensure you have the following installed:
 - **Java 17** or later
 - **Gradle** (if not using the wrapper)
 - **PostgreSQL** (version 12 or later)
+- **Docker** (set up docker locally)
 
 ---
 
@@ -59,103 +60,137 @@ git clone https://github.com/poojareddy7766/Splitwise-backend-Setu.git
 cd Splitwise-backend-Setu 
 ```
 
-2. Configure the Database
-Create a PostgreSQL database named splitwise_db.
-Update the database connection details in src/main/resources/application.properties:
+### 2. Create the PostgreSQL Database
+
+Make sure PostgreSQL is running on your machine. Then, create a database named splitwise_db:{Replace your_username with your actual PostgreSQL username.}
+```
+createdb -U your_username splitwise_db
+```
+### 3. Update Database Credentials (replace your username and password)
 ```
 spring.datasource.username=your_username
 spring.datasource.password=your_password
 ```
-
-3. Build the project
+### 4. Flyway Configuration for Database Migrations (replace your username and password)
+```
+user = 'your_username'
+password = 'your_password'
+```
+### 5. Run the Flyway Migration
+```
+./gradlew flywayMigrate
+```
+### 6. Build the project
 
 ```
 ./gradlew build
-
 ```
 
-
-4. Run the Flyway migration task:
-
-```
-./gradlew flywayMigrate
-
-```
-
-5. Make sure docker is running 
+### 7. Make sure docker is running 
 
 ```
 open -a Docker
 ```
 
-6. Build the Project using docker 
+### 8. Build the Project using docker 
 ```
  docker build -t splitwise-backend .
 ```
 
-7. Run the Application
+### 9. Run the Application
 ```
  docker run -p 8080:8080 splitwise-backend          
 ```
 
-The application will start on http://localhost:8080
+The application will start on [http://localhost:8080/](http://localhost:8080/)
+
+### 🧪 API Documentation
+Access the Swagger UI to test and explore APIs:
+👉 [http://localhost:8080/swagger-ui/index.html](http://localhost:8080/swagger-ui/index.html)
+
+
+
 
 API Endpoints
-1. User Management
-   POST /users
+1. User Registration
+   POST /api/auth/register
+
+body: 
 ```
-Create User: POST /users
 {
-    "name": "John Doe",
-    "email": "john.doe@example.com"
+  "email": "yoo5@google.com",
+  "name": "Setu ",
+  "password": "password123"
 }
 ```
 
-2. Expense Management
+2. Login 
+   POST  /api/auth/login
 
-Create Expense: POST /expenses
+body: 
 ```
 {
-    "description": "Dinner",
-    "amount": 1000,
-    "paidById": 1,
-    "splitType": "EQUAL",
-    "userShares": {
-        "1": 500,
-        "2": 500
+  "email": "yoo5@google.com",
+  "password": "password123"
+}
+```
+The response is a jwt token. Pass this as a bearer-token in all the other api calls.
+
+3. create expense
+
+body: 
+```
+{
+        "id": 1,
+        "description": "shopping",
+        "amount": 1000,
+        "paidById": 3,
+        "splitType": "EQUAL",
+        "userShares": {
+            "3": 500,
+            "2": 500
+        }
     }
-}
 ```
 
 Get All Expenses: GET /expenses<br/>
-Get All Expenses: GET /expenses/{expenseId}<br/>
-Get Expenses by User ID: GET /expenses/user/{userId}<br/>
+Get expense with expenseId : GET /expenses/{expenseId}<br/>
+Get Expenses for a user, with user Id: GET /expenses/user/{userId}<br/>
 
-3. Balance Tracking
+
+4. Balance Tracking <br />
 Get All Balances: GET /balances/all
 Response:
 ```
-
 {
-    "1": "User 1 is with a profit of ₹6200.00",
-    "2": "User 2 owes ₹7840.00",
+    "1": "User 1 owes nothing",
+    "2": "User 2 owes a total of {rupees} to {User x, User y}",
     "3": "User 3 owes nothing",
     "4": "User 4 owes nothing",
-    "5": "User 5 is with a profit of ₹400.00",
-    "6": "User 6 owes ₹400.00",
-    "8": "User 8 owes nothing",
-
+    "5": "User 5 owes nothing",
+    "6": "User 6 owes nothing",
 }
+
 ```
+Get balance of an individual user:
 
 GET /getBalance/{userId}
+
 Response:
 ```
-{
-    "message": "User 8 owes nothing"
+    {
+    "breakdown": [
+        {
+            "amount": 500.00,
+            "owesTo": 3
+        }
+    ],
+    "userId": 2,
+    "totalOwed": 500.00
 }
 ```
-4. Payment Settlement
+
+5. Payment Settlement
 Settle Payment: POST /settle
 ```
 {
@@ -164,8 +199,23 @@ Settle Payment: POST /settle
     "amount": 500
 }
 ```
+response:
+```
+User A has successfully settled payment of ₹x to User B
+```
+
+6. Get list of expenses associated with a user, using pagination
+
+```
+/expenses/user/2/fetchAll?page=a&size=b
+```
+replace a and b as per ur wish
+
+
+
 
 ## Database Schema
+
 
 The application uses the following database schema to manage users, expenses, balances, and settlements:
 
@@ -195,19 +245,15 @@ The application uses the following database schema to manage users, expenses, ba
    - `receiver_id`: User who received the payment
    - `amount`: Amount settled
 
-preview: ![Alt text for the image](assets/tables.png)
+preview:
+
+ ![Alt text for the image](assets/tables.png)
 
 ## Future Enhancements
 
-- Write tests
-- Set up Docker
 - use refresh tokens -- authorization
-
-
-## Future Enhancements
-
 - Implement detailed transaction history for users.
-- Create Groups
+- create groups, add members, and split expenses among group members.
 
 ## Walkthrough apis
 
