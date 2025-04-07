@@ -30,45 +30,23 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
-            throws ServletException, IOException {
-        try {
-            String jwt = getJwtFromRequest(request);
-            logger.debug("Processing request for URI: {}", request.getRequestURI());
-            logger.debug("Authorization header: {}", request.getHeader("Authorization"));
-            logger.debug("JWT token present: {}", jwt != null);
-            
-            if (jwt != null) {
-                logger.debug("JWT token length: {}", jwt.length());
-                logger.debug("JWT token: {}", jwt);
-                
-                if (tokenProvider.validateToken(jwt)) {
-                    logger.debug("Token validation successful");
-                    String username = tokenProvider.getUsernameFromToken(jwt);
-                    logger.debug("Username from token: {}", username);
-                    
-                    UserDetails userDetails = userDetailsService.loadUserByUsername(username);
-                    logger.debug("User details loaded successfully for: {}", username);
-                    
-                    UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
-                            userDetails, null, userDetails.getAuthorities());
-                    authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-
-                    SecurityContextHolder.getContext().setAuthentication(authentication);
-                    logger.debug("Authentication successful for user: {}", username);
-                    logger.debug("User authorities: {}", userDetails.getAuthorities());
-                } else {
-                    logger.error("Token validation failed");
-                }
-            } else {
-                logger.error("No JWT token found in request");
-            }
-        } catch (Exception ex) {
-            logger.error("Could not set user authentication in security context", ex);
-            logger.error("Exception details: {}", ex.getMessage());
-            ex.printStackTrace();
-        }
-
+            throws ServletException, IOException {  
+                String requestURI = request.getRequestURI();
+    if (requestURI.startsWith("/swagger-ui") || requestURI.startsWith("/v3/api-docs")) {
         filterChain.doFilter(request, response);
+        return;
+    }
+    String token = getJwtFromRequest(request);
+    if (StringUtils.hasText(token) && tokenProvider.validateToken(token)) {
+        String username = tokenProvider.getUsernameFromToken(token);
+        UserDetails userDetails = userDetailsService.loadUserByUsername(username);
+        UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
+                userDetails, null, userDetails.getAuthorities());
+        authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+        SecurityContextHolder.getContext().setAuthentication(authentication);
+    }
+
+    filterChain.doFilter(request, response);
     }
 
     private String getJwtFromRequest(HttpServletRequest request) {
