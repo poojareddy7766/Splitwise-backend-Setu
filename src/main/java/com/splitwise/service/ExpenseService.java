@@ -18,6 +18,7 @@ import java.math.RoundingMode;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
@@ -39,7 +40,6 @@ public class ExpenseService {
 
    @Transactional
    public Expense createExpense(ExpenseRequest request) {
-       // Fetch the user who paid the expense
        User paidBy = userRepository.findById(request.getPaidById())
                .orElseThrow(() -> new RuntimeException("User not found"));
        Expense expense = new Expense();
@@ -65,64 +65,78 @@ public class ExpenseService {
     private void updateUserBalances(Expense expense) {
         Long paidById = expense.getPaidBy().getId();
         BigDecimal totalAmount = expense.getAmount();
-        int numberOfUsers = expense.getUserShares().size();
-        BigDecimal equalShare = totalAmount.divide(BigDecimal.valueOf(numberOfUsers), RoundingMode.HALF_UP);
-        for (ExpenseShare share : expense.getUserShares()) {
-            Long userId = share.getUser().getId();
-            BigDecimal shareAmount = share.getAmount();
-            BigDecimal balanceAmount = shareAmount.subtract(equalShare);
+        SplitType splitType = expense.getSplitType();
+
+        Map<Long, BigDecimal> userToOwedAmount = new HashMap<>();
+        List<ExpenseShare> shares = expense.getUserShares();
+        switch (splitType) {
+            case EQUAL:
+                BigDecimal equalShare = totalAmount.divide(BigDecimal.valueOf(shares.size()), RoundingMode.HALF_UP);
+                for (ExpenseShare share : shares) {
+                    userToOwedAmount.put(share.getUser().getId(), equalShare);
+                }
+                break;
+
+            case UNEQUAL:
+                for (ExpenseShare share : shares) {
+                    userToOwedAmount.put(share.getUser().getId(), share.getAmount());
+                }
+                break;
+
+            case PERCENTAGE:
+                for (ExpenseShare share : shares) {
+                    BigDecimal percentage = share.getAmount(); // here see it this way, 25 means 25%
+                    BigDecimal calculatedAmount = totalAmount.multiply(percentage).divide(BigDecimal.valueOf(100), RoundingMode.HALF_UP);
+                    userToOwedAmount.put(share.getUser().getId(), calculatedAmount);
+                }
+                break;
+
+            default:
+                throw new RuntimeException("Unsupported split type: " + splitType);
+        }
+
+        for (Map.Entry<Long, BigDecimal> entry : userToOwedAmount.entrySet()) {
+            Long userId = entry.getKey();
+            BigDecimal amountOwed = entry.getValue();
+
             if (userId.equals(paidById)) {
                 continue;
             }
-            UserBalance userBalance = userBalanceRepository.findByUserIdAndOtherUserId(userId, paidById)
-                    .orElseGet(() -> {
-                        UserBalance newBalance = new UserBalance();
-                        newBalance.setUserId(userId);
-                        newBalance.setOtherUserId(paidById);
-                        newBalance.setBalanceAmount(BigDecimal.ZERO);
-                        return newBalance;
-                    });
+            Long debtorId = userId;
+            Long creditorId = paidById;
+            BigDecimal amount = amountOwed;
 
-            userBalance.setBalanceAmount(userBalance.getBalanceAmount().subtract(balanceAmount));
-            userBalanceRepository.save(userBalance);
-            UserBalance payerBalance = userBalanceRepository.findByUserIdAndOtherUserId(paidById, userId)
-                    .orElseGet(() -> {
-                        UserBalance newBalance = new UserBalance();
-                        newBalance.setUserId(paidById);
-                        newBalance.setOtherUserId(userId);
-                        newBalance.setBalanceAmount(BigDecimal.ZERO);
-                        return newBalance;
-                    });
+            Optional<UserBalance> forwardBalanceOpt = userBalanceRepository.findByUserIdAndOtherUserId(debtorId, creditorId);
+            Optional<UserBalance> reverseBalanceOpt = userBalanceRepository.findByUserIdAndOtherUserId(creditorId, debtorId);
 
-            payerBalance.setBalanceAmount(payerBalance.getBalanceAmount().add(balanceAmount));
-            userBalanceRepository.save(payerBalance);
+            if (forwardBalanceOpt.isPresent()) {
+                UserBalance balance = forwardBalanceOpt.get();
+                balance.setBalanceAmount(balance.getBalanceAmount().add(amount));
+                userBalanceRepository.save(balance);
+            } else if (reverseBalanceOpt.isPresent()) {
+                UserBalance balance = reverseBalanceOpt.get();
+                BigDecimal newAmount = balance.getBalanceAmount().subtract(amount);
+
+                if (newAmount.compareTo(BigDecimal.ZERO) > 0) {
+                    balance.setBalanceAmount(newAmount);
+                    userBalanceRepository.save(balance);
+                } else if (newAmount.compareTo(BigDecimal.ZERO) < 0) {
+                    balance.setUserId(debtorId);
+                    balance.setOtherUserId(creditorId);
+                    balance.setBalanceAmount(newAmount.abs());
+                    userBalanceRepository.save(balance);
+                } else {
+                    userBalanceRepository.delete(balance);
+                }
+            } else {
+                UserBalance newBalance = new UserBalance();
+                newBalance.setUserId(debtorId);
+                newBalance.setOtherUserId(creditorId);
+                newBalance.setBalanceAmount(amount);
+                userBalanceRepository.save(newBalance);
+            }
         }
     }
-
-    public Map<String, String> getUserBalance(Long userId) {
-        List<UserBalance> balancesOwed = userBalanceRepository.findByUserId(userId);
-        List<UserBalance> balancesReceivable = userBalanceRepository.findByOtherUserId(userId);
-        BigDecimal totalOwed = balancesOwed.stream()
-                .map(UserBalance::getBalanceAmount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-        BigDecimal totalReceivable = balancesReceivable.stream()
-                .map(UserBalance::getBalanceAmount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal netBalance = totalReceivable.subtract(totalOwed);
-        Map<String, String> response = new HashMap<>();
-        if (netBalance.compareTo(BigDecimal.ZERO) > 0) {
-            response.put("message", "User " + userId + " is owed ₹" + netBalance);
-        } else if (netBalance.compareTo(BigDecimal.ZERO) < 0) {
-            response.put("message", "User " + userId + " owes ₹" + netBalance.abs());
-        } else {
-            response.put("message", "User " + userId + " owes nothing");
-        }
-
-        return response;
-    }
-
-
 
     public List<Expense> getAllExpenses() {
         return expenseRepository.findAll();
@@ -139,6 +153,30 @@ public class ExpenseService {
                     .anyMatch(share -> share.getUser().getId().equals(userId)))
             .collect(Collectors.toList());
 }
+    public Map<String, Object> getUserBalance(Long userId) {
+        List<UserBalance> balances = userBalanceRepository.findByUserId(userId);
+
+        List<Map<String, Object>> owedList = balances.stream()
+                .filter(balance -> balance.getBalanceAmount().compareTo(BigDecimal.ZERO) > 0)
+                .map(balance -> {
+                    Map<String, Object> entry = new HashMap<>();
+                    entry.put("owesTo", balance.getOtherUserId());
+                    entry.put("amount", balance.getBalanceAmount());
+                    return entry;
+                })
+                .collect(Collectors.toList());
+
+        BigDecimal totalOwed = owedList.stream()
+                .map(entry -> (BigDecimal) entry.get("amount"))
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("userId", userId);
+        response.put("totalOwed", totalOwed);
+        response.put("breakdown", owedList);
+
+        return response;
+    }
 
 
     private ExpenseDTO mapToDTO(Expense expense) {
@@ -155,83 +193,91 @@ public class ExpenseService {
             )));
     return dto;
 }
-public void settlePayment(Long senderId, Long receiverId, BigDecimal amount) {
-    UserBalance senderBalance = userBalanceRepository.findByUserIdAndOtherUserId(senderId, receiverId)
-            .orElseGet(() -> {
-                UserBalance newBalance = new UserBalance();
-                newBalance.setUserId(senderId);
-                newBalance.setOtherUserId(receiverId);
-                newBalance.setBalanceAmount(BigDecimal.ZERO);
-                return newBalance;
-            });
-    senderBalance.setBalanceAmount(senderBalance.getBalanceAmount().subtract(amount));
-    if (senderBalance.getBalanceAmount().compareTo(BigDecimal.ZERO) == 0) {
-        userBalanceRepository.delete(senderBalance);
-    } else {
-        userBalanceRepository.save(senderBalance);
-    }
-    UserBalance receiverBalance = userBalanceRepository.findByUserIdAndOtherUserId(receiverId, senderId)
-            .orElseGet(() -> {
-                UserBalance newBalance = new UserBalance();
-                newBalance.setUserId(receiverId);
-                newBalance.setOtherUserId(senderId);
-                newBalance.setBalanceAmount(BigDecimal.ZERO);
-                return newBalance;
-            });
-    receiverBalance.setBalanceAmount(receiverBalance.getBalanceAmount().add(amount));
 
-    if (receiverBalance.getBalanceAmount().compareTo(BigDecimal.ZERO) == 0) {
-        userBalanceRepository.delete(receiverBalance);
-    } else {
-        userBalanceRepository.save(receiverBalance);
-    }
-    Settlement settlement = new Settlement();
-    settlement.setSenderId(senderId);
-    settlement.setReceiverId(receiverId);
-    settlement.setAmount(amount);
-    settlementRepository.save(settlement);
-    System.out.println("Updated sender balance: " + senderBalance);
-    System.out.println("Updated receiver balance: " + receiverBalance);
-    System.out.println("Recorded settlement: " + settlement);
-}
+    public String settlePayment(Long senderId, Long receiverId, BigDecimal amount) {
+        UserBalance senderBalance = userBalanceRepository.findByUserIdAndOtherUserId(senderId, receiverId)
+                .orElseGet(() -> {
+                    UserBalance newBalance = new UserBalance();
+                    newBalance.setUserId(senderId);
+                    newBalance.setOtherUserId(receiverId);
+                    newBalance.setBalanceAmount(BigDecimal.ZERO);
+                    return newBalance;
+                });
 
-public Map<Long, String> getAllUserBalances() {
+        BigDecimal updatedBalance = senderBalance.getBalanceAmount().subtract(amount);
+        if (updatedBalance.compareTo(BigDecimal.ZERO) > 0) {
+            senderBalance.setBalanceAmount(updatedBalance);
+            userBalanceRepository.save(senderBalance);
+        } else if (updatedBalance.compareTo(BigDecimal.ZERO) < 0) {
+            BigDecimal reversedAmount = updatedBalance.abs();
+            if (senderBalance.getId() != null) {
+                userBalanceRepository.delete(senderBalance);
+            }
+            UserBalance reverseBalance = userBalanceRepository.findByUserIdAndOtherUserId(receiverId, senderId)
+                    .orElseGet(() -> {
+                        UserBalance newBalance = new UserBalance();
+                        newBalance.setUserId(receiverId);
+                        newBalance.setOtherUserId(senderId);
+                        newBalance.setBalanceAmount(BigDecimal.ZERO);
+                        return newBalance;
+                    });
 
-    List<UserBalance> allBalances = userBalanceRepository.findAll();
-
-    Map<Long, BigDecimal> userNetBalances = new HashMap<>();
-
-    for (UserBalance balance : allBalances) {
-        Long userId = balance.getUserId();
-        Long otherUserId = balance.getOtherUserId();
-        BigDecimal balanceAmount = balance.getBalanceAmount();
-
-        userNetBalances.put(userId, userNetBalances.getOrDefault(userId, BigDecimal.ZERO).subtract(balanceAmount));
-
-        userNetBalances.put(otherUserId, userNetBalances.getOrDefault(otherUserId, BigDecimal.ZERO).add(balanceAmount));
-    }
-
-
-    Map<Long, String> response = new HashMap<>();
-    for (Map.Entry<Long, BigDecimal> entry : userNetBalances.entrySet()) {
-        Long userId = entry.getKey();
-        BigDecimal netBalance = entry.getValue();
-
-        if (netBalance.compareTo(BigDecimal.ZERO) > 0) {
-            response.put(userId, "User " + userId + " is with a profit of ₹" + netBalance);
-        } else if (netBalance.compareTo(BigDecimal.ZERO) < 0) {
-            response.put(userId, "User " + userId + " owes ₹" + netBalance.abs());
+            reverseBalance.setBalanceAmount(reversedAmount);
+            userBalanceRepository.save(reverseBalance);
         } else {
-            response.put(userId, "User " + userId + " owes nothing");
+            if (senderBalance.getId() != null) {
+                userBalanceRepository.delete(senderBalance);
+            }
         }
-    }
-    List<Long> allUserIds = userRepository.findAll().stream().map(User::getId).collect(Collectors.toList());
-    for (Long userId : allUserIds) {
-        if (!response.containsKey(userId)) {
-            response.put(userId, "User " + userId + " owes nothing");
-        }
+
+        Settlement settlement = new Settlement();
+        settlement.setSenderId(senderId);
+        settlement.setReceiverId(receiverId);
+        settlement.setAmount(amount);
+        settlementRepository.save(settlement);
+
+        String message = String.format("User %d has successfully settled payment of ₹%.2f to User %d", senderId, amount, receiverId);
+        System.out.println(message);
+        return message;
     }
 
-    return response;
-}
+
+
+    public Map<Long, String> getAllUserBalances() {
+        List<UserBalance> allBalances = userBalanceRepository.findAll();
+        Map<Long, Map<Long, BigDecimal>> userToOwedMap = new HashMap<>();
+        for (UserBalance balance : allBalances) {
+            Long userId = balance.getUserId();
+            Long otherUserId = balance.getOtherUserId();
+            BigDecimal amount = balance.getBalanceAmount();
+
+            if (amount.compareTo(BigDecimal.ZERO) > 0) {
+                userToOwedMap
+                        .computeIfAbsent(userId, k -> new HashMap<>())
+                        .merge(otherUserId, amount, BigDecimal::add);
+            }
+        }
+        Map<Long, String> response = new HashMap<>();
+        List<Long> allUserIds = userRepository.findAll().stream()
+                .map(User::getId)
+                .collect(Collectors.toList());
+
+        for (Long userId : allUserIds) {
+            Map<Long, BigDecimal> owesMap = userToOwedMap.getOrDefault(userId, new HashMap<>());
+
+            if (!owesMap.isEmpty()) {
+                BigDecimal totalOwed = owesMap.values().stream()
+                        .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+                String toUsers = owesMap.keySet().stream()
+                        .map(id -> "User " + id)
+                        .collect(Collectors.joining(", "));
+
+                response.put(userId, "User " + userId + " owes a total of ₹" + totalOwed + " to {" + toUsers + "}");
+            } else {
+                response.put(userId, "User " + userId + " owes nothing");
+            }
+        }
+        return response;
+    }
 }
