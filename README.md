@@ -55,7 +55,7 @@ Before running the project, ensure you have the following installed:
 ### 1. Clone the Repository
 
 ```
- git clone https://github.com/poojareddy7766/Splitwise-backend-Setu.git 
+git clone https://github.com/poojareddy7766/Splitwise-backend-Setu.git 
 cd splitwise-backend
 ```
 
