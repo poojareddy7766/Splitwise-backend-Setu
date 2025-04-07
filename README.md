@@ -187,6 +187,7 @@ The application uses the following database schema to manage users, expenses, ba
    - `receiver_id`: User who received the payment
    - `amount`: Amount settled
 
+preview: ![Alt text for the image](assets/tables.png)
 
 ## Future Enhancements
 
